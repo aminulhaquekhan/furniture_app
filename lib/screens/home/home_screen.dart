@@ -4,11 +4,12 @@ import '../product/product_list_screen.dart';
 class HomeScreen extends StatelessWidget {
   HomeScreen({super.key});
 
+  // <-- NOTE: use keys that exist in product_data.dart (plural where used)
   final List<Map<String, String>> categories = [
     {'id': 'chairs', 'label': 'Chairs'},
-    {'id': 'sofa', 'label': 'Sofas'},
-    {'id': 'table', 'label': 'Tables'},
-    {'id': 'bed', 'label': 'Beds'},
+    {'id': 'sofas', 'label': 'Sofas'}, // changed from 'sofa' -> 'sofas'
+    {'id': 'tables', 'label': 'Tables'}, // changed from 'table' -> 'tables'
+    {'id': 'beds', 'label': 'Beds'}, // changed from 'bed' -> 'beds'
     {'id': 'decor', 'label': 'Decor'},
   ];
 
@@ -58,7 +59,6 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          // You can show some recommended products or recent items here
           Expanded(
             child: Center(
               child: Text('Select a category above to view products'),

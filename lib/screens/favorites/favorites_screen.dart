@@ -1,9 +1,54 @@
 import 'package:flutter/material.dart';
 import '../../services/firestore_service.dart';
 import '../../models/product.dart';
+import '../../data/product_data.dart';
+import '../../widgets/product_tile.dart';
 
 class FavoritesScreen extends StatelessWidget {
   const FavoritesScreen({super.key});
+
+  Product _mapDocToProduct(Map<String, dynamic> doc, String docId) {
+    // If snapshot fields exist, use them. Otherwise fallback to local catalog by id.
+    final name = doc['name'] as String? ?? '';
+    final priceRaw = doc['price'];
+    final price = (priceRaw is num)
+        ? priceRaw.toDouble()
+        : (double.tryParse('$priceRaw') ?? 0.0);
+    final imageUrl = doc['imageUrl'] as String? ?? '';
+    final category = doc['category'] as String? ?? '';
+
+    if (name.isNotEmpty && imageUrl.isNotEmpty) {
+      return Product(
+        id: docId,
+        name: name,
+        price: price,
+        imageUrl: imageUrl,
+        category: category,
+      );
+    }
+
+    // fallback: try to find in local productCatalog by id or category
+    if (productCatalog.containsKey(category)) {
+      final found = productCatalog[category]!
+          .where((p) => p.id == docId)
+          .toList();
+      if (found.isNotEmpty) return found.first;
+    }
+    // fallback: search all keys for matching id
+    for (final entry in productCatalog.entries) {
+      final found = entry.value.where((p) => p.id == docId).toList();
+      if (found.isNotEmpty) return found.first;
+    }
+
+    // last fallback: return a minimal Product with placeholder
+    return Product(
+      id: docId,
+      name: name.isNotEmpty ? name : 'Unnamed',
+      price: price,
+      imageUrl: imageUrl.isNotEmpty ? imageUrl : '',
+      category: category.isNotEmpty ? category : 'unknown',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,56 +56,34 @@ class FavoritesScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Favorites')),
-      body: StreamBuilder<List<String>>(
-        stream: fs.getFavoriteProductIds(),
-        builder: (context, favSnap) {
-          if (!favSnap.hasData)
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: fs
+            .streamFavoriteDocs(), // this returns List<Map> where each map includes id field
+        builder: (context, snap) {
+          if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
+          if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
-          final favIds = favSnap.data!;
-          if (favIds.isEmpty)
+          }
+          final docs = snap.data!; // each doc has fields + 'id'
+          if (docs.isEmpty) {
             return const Center(child: Text('No favorites yet'));
+          }
 
-          return StreamBuilder<List<Product>>(
-            stream: fs.getProducts(),
-            builder: (context, prodSnap) {
-              if (!prodSnap.hasData)
-                return const Center(child: CircularProgressIndicator());
-              final all = prodSnap.data!;
-              final favProducts = all
-                  .where((p) => favIds.contains(p.id))
-                  .toList();
+          final products = docs.map((d) {
+            final id = d['id'] ?? '';
+            return _mapDocToProduct(d, id);
+          }).toList();
 
-              return ListView.builder(
-                itemCount: favProducts.length,
-                itemBuilder: (context, i) {
-                  final p = favProducts[i];
-                  return ListTile(
-                    leading: p.imageUrl.isNotEmpty
-                        ? Image.network(
-                            p.imageUrl,
-                            width: 60,
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                    title: Text(p.name),
-                    subtitle: Text('৳ ${p.price.toStringAsFixed(0)}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.add_shopping_cart),
-                          onPressed: () => fs.addToCart(p.id),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => fs.removeFromFavorites(p.id),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
+          return GridView.builder(
+            padding: const EdgeInsets.all(12),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 0.68,
+            ),
+            itemCount: products.length,
+            itemBuilder: (context, i) => ProductTile(product: products[i]),
           );
         },
       ),

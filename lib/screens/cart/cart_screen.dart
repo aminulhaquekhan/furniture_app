@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../services/firestore_service.dart';
-import '../../models/product.dart';
-import '../../widgets/product_tile.dart';
 
 class CartScreen extends StatelessWidget {
   const CartScreen({super.key});
@@ -12,98 +10,158 @@ class CartScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('My Cart')),
-      body: StreamBuilder<List<String>>(
-        stream: fs.getCartProductIds(),
-        builder: (context, cartSnap) {
-          if (!cartSnap.hasData)
+      body: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: fs.streamCartDocs(),
+        builder: (context, snap) {
+          if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
+          if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
-          final cartIds = cartSnap.data!;
-          if (cartIds.isEmpty)
-            return const Center(child: Text('Cart is empty'));
+          }
+          final docs = snap.data!;
+          if (docs.isEmpty) return const Center(child: Text('Cart is empty'));
 
-          // get all products and filter
-          return StreamBuilder<List<Product>>(
-            stream: fs.getProducts(),
-            builder: (context, prodSnap) {
-              if (!prodSnap.hasData)
-                return const Center(child: CircularProgressIndicator());
-              final all = prodSnap.data!;
-              final cartProducts = all
-                  .where((p) => cartIds.contains(p.id))
-                  .toList();
+          double total = 0;
+          for (final d in docs) {
+            final price = (d['price'] ?? 0).toDouble();
+            final qty = (d['quantity'] ?? 0) as num;
+            total += price * qty;
+          }
 
-              double total = 0;
-              for (final p in cartProducts) total += p.price;
+          return Column(
+            children: [
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: docs.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, i) {
+                    final item = docs[i];
+                    final id = item['id'] ?? '';
+                    final name = item['name'] ?? 'Unnamed';
+                    final price = (item['price'] ?? 0).toDouble();
+                    final imageUrl = item['imageUrl'] ?? '';
+                    final qty = (item['quantity'] ?? 0) as int;
 
-              return Column(
-                children: [
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: cartProducts.length,
-                      itemBuilder: (context, i) {
-                        final p = cartProducts[i];
-                        return ListTile(
-                          leading: p.imageUrl.isNotEmpty
-                              ? Image.network(
-                                  p.imageUrl,
-                                  width: 60,
-                                  fit: BoxFit.cover,
-                                )
-                              : null,
-                          title: Text(p.name),
-                          subtitle: Text('৳ ${p.price.toStringAsFixed(0)}'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () => fs.removeFromCart(p.id),
+                    return Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            // image
+                            Container(
+                              width: 90,
+                              height: 90,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(8),
+                                image: imageUrl != ''
+                                    ? DecorationImage(
+                                        image: NetworkImage(imageUrl),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              child: imageUrl == ''
+                                  ? const Icon(Icons.image_not_supported)
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            // details and controls
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '৳ ${price.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      // minus
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                        ),
+                                        onPressed: () async {
+                                          await fs.decrementCartItem(id);
+                                        },
+                                      ),
+                                      Text(
+                                        qty.toString(),
+                                        style: const TextStyle(fontSize: 16),
+                                      ),
+                                      // plus
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.add_circle_outline,
+                                        ),
+                                        onPressed: () async {
+                                          await fs.addToCart(
+                                            id,
+                                          ); // this will increment quantity by 1 (if doc exists, transaction increments)
+                                        },
+                                      ),
+                                      const Spacer(),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed: () async {
+                                          await fs.removeFromCart(id);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              // total + checkout
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Text(
+                      'Total: ৳ ${total.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: () {
+                        // TODO: implement checkout flow
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Checkout not implemented'),
                           ),
                         );
                       },
+                      child: const Text('Checkout'),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Total: ৳ ${total.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        FilledButton(
-                          onPressed: () async {
-                            // Here you can implement checkout/order creation
-                            final items = cartProducts
-                                .map(
-                                  (p) => {
-                                    'productId': p.id,
-                                    'name': p.name,
-                                    'price': p.price,
-                                    'qty': 1,
-                                  },
-                                )
-                                .toList();
-                            await fs.createOrder(
-                              items: items,
-                              totalAmount: total,
-                              paymentMethod: 'cash_on_delivery',
-                            );
-                            await fs.clearCart();
-                            if (context.mounted)
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Order placed')),
-                              );
-                          },
-                          child: const Text('Checkout'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                ),
+              ),
+            ],
           );
         },
       ),

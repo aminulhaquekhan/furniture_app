@@ -45,19 +45,59 @@ class FirestoreService {
   }
 
   // ---------------- Cart ----------------
-  Future<void> addToCart(String productId, {Map<String, dynamic>? extra}) {
-    return _db
+  Future<void> addToCart(
+    String productId, {
+    Map<String, dynamic>? extra,
+  }) async {
+    final docRef = _db
         .collection('users')
         .doc(_uid)
         .collection('cart')
-        .doc(productId)
-        .set({
-          'added': true,
+        .doc(productId);
+
+    // Use transaction so we both write the snapshot and increment safely
+    await _db.runTransaction((tx) async {
+      final snapshot = await tx.get(docRef);
+      if (!snapshot.exists) {
+        final data = {
+          'quantity': 1,
           'createdAt': FieldValue.serverTimestamp(),
           if (extra != null) ...extra,
-        });
+        };
+        tx.set(docRef, data, SetOptions(merge: true));
+      } else {
+        // increment quantity by 1
+        tx.update(docRef, {'quantity': FieldValue.increment(1)});
+        // also merge snapshot fields if provided
+        if (extra != null) {
+          tx.update(docRef, extra);
+        }
+      }
+    });
   }
 
+  // Decrement quantity: if quantity > 1 decrement, else delete doc
+  Future<void> decrementCartItem(String productId) async {
+    final docRef = _db
+        .collection('users')
+        .doc(_uid)
+        .collection('cart')
+        .doc(productId);
+
+    await _db.runTransaction((tx) async {
+      final snapshot = await tx.get(docRef);
+      if (!snapshot.exists) return;
+      final data = snapshot.data()!;
+      final currentQty = (data['quantity'] ?? 0) as num;
+      if (currentQty > 1) {
+        tx.update(docRef, {'quantity': FieldValue.increment(-1)});
+      } else {
+        tx.delete(docRef);
+      }
+    });
+  }
+
+  // Remove from cart
   Future<void> removeFromCart(String productId) {
     return _db
         .collection('users')
@@ -65,6 +105,22 @@ class FirestoreService {
         .collection('cart')
         .doc(productId)
         .delete();
+  }
+
+  // Stream of cart documents with their data (not only ids)
+  Stream<List<Map<String, dynamic>>> streamCartDocs() {
+    return _db
+        .collection('users')
+        .doc(_uid)
+        .collection('cart')
+        .snapshots()
+        .map(
+          (snap) => snap.docs.map((d) {
+            final m = d.data();
+            m['id'] = d.id;
+            return m;
+          }).toList(),
+        );
   }
 
   Stream<List<String>> getCartProductIds() {
@@ -85,13 +141,19 @@ class FirestoreService {
   }
 
   // ---------------- Favorites ----------------
-  Future<void> addToFavorites(String productId) {
-    return _db
+  // Add to favorites (store snapshot too)
+  Future<void> addToFavorites(String productId, {Map<String, dynamic>? extra}) {
+    final docRef = _db
         .collection('users')
         .doc(_uid)
         .collection('favorites')
-        .doc(productId)
-        .set({'fav': true, 'createdAt': FieldValue.serverTimestamp()});
+        .doc(productId);
+    final data = {
+      'fav': true,
+      'createdAt': FieldValue.serverTimestamp(),
+      if (extra != null) ...extra,
+    };
+    return docRef.set(data, SetOptions(merge: true));
   }
 
   Future<void> removeFromFavorites(String productId) {
@@ -110,6 +172,22 @@ class FirestoreService {
         .collection('favorites')
         .snapshots()
         .map((snap) => snap.docs.map((d) => d.id).toList());
+  }
+
+  // Stream of favorite documents with their data
+  Stream<List<Map<String, dynamic>>> streamFavoriteDocs() {
+    return _db
+        .collection('users')
+        .doc(_uid)
+        .collection('favorites')
+        .snapshots()
+        .map(
+          (snap) => snap.docs.map((d) {
+            final m = d.data();
+            m['id'] = d.id;
+            return m;
+          }).toList(),
+        );
   }
 
   // ---------------- Orders ----------------
