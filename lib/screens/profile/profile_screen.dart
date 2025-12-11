@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:furniture_app/screens/auth/auth_choice_screen.dart';
 import '../../services/firestore_service.dart';
+import '../auth/auth_choice_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,32 +17,83 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final phoneCtrl = TextEditingController();
   final addressCtrl = TextEditingController();
   final FirestoreService fs = FirestoreService();
+  StreamSubscription<Map<String, dynamic>?>? _addrSub;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    fs.getAddress().listen((data) {
-      if (data != null) {
-        nameCtrl.text = data['name'] ?? '';
-        phoneCtrl.text = data['phone'] ?? '';
-        addressCtrl.text = data['address'] ?? '';
-      }
-    });
+    // subscribe to address stream and fill controllers when data arrives
+    _addrSub = fs.getAddress().listen(
+      (data) {
+        if (data != null && mounted) {
+          nameCtrl.text = data['name'] ?? '';
+          phoneCtrl.text = data['phone'] ?? '';
+          addressCtrl.text = data['address'] ?? '';
+        }
+      },
+      onError: (e) {
+        debugPrint('Address stream error: $e');
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _addrSub?.cancel();
+    nameCtrl.dispose();
+    phoneCtrl.dispose();
+    addressCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _save() async {
-    setState(() => _saving = true);
-    await fs.saveAddress(
-      name: nameCtrl.text,
-      phone: phoneCtrl.text,
-      address: addressCtrl.text,
-    );
-    setState(() => _saving = false);
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Address saved')));
+    final name = nameCtrl.text.trim();
+    final phone = phoneCtrl.text.trim();
+    final address = addressCtrl.text.trim();
+
+    if (name.isEmpty || phone.isEmpty || address.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all address fields')),
+      );
+      return;
+    }
+
+    try {
+      setState(() => _saving = true);
+      await fs.saveAddress(name: name, phone: phone, address: address);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Address saved')));
+    } catch (e) {
+      debugPrint('Save address error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error saving address: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthChoiceScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      debugPrint('Sign out error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Logout failed: $e')));
+      }
+    }
   }
 
   @override
@@ -55,7 +108,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              user?.email ?? '',
+              user?.email ?? 'No email',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
@@ -103,14 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () async {
-                  await FirebaseAuth.instance.signOut();
-                  if (!context.mounted) return;
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const AuthChoiceScreen()),
-                    (route) => false,
-                  );
-                },
+                onPressed: _logout,
                 icon: const Icon(Icons.logout),
                 label: const Text('Logout'),
               ),

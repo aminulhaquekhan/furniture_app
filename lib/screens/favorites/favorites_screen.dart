@@ -1,50 +1,62 @@
 import 'package:flutter/material.dart';
 import '../../services/firestore_service.dart';
 import '../../models/product.dart';
-import '../../widgets/product_card.dart';
 
 class FavoritesScreen extends StatelessWidget {
   const FavoritesScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final FirestoreService fs = FirestoreService();
+    final fs = FirestoreService();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Favorites')),
       body: StreamBuilder<List<String>>(
         stream: fs.getFavoriteProductIds(),
-        builder: (context, favSnapshot) {
-          if (!favSnapshot.hasData) {
+        builder: (context, favSnap) {
+          if (!favSnap.hasData)
             return const Center(child: CircularProgressIndicator());
-          }
-
-          final favIds = favSnapshot.data!;
-          if (favIds.isEmpty) {
+          final favIds = favSnap.data!;
+          if (favIds.isEmpty)
             return const Center(child: Text('No favorites yet'));
-          }
 
           return StreamBuilder<List<Product>>(
             stream: fs.getProducts(),
-            builder: (context, productSnapshot) {
-              if (!productSnapshot.hasData) {
+            builder: (context, prodSnap) {
+              if (!prodSnap.hasData)
                 return const Center(child: CircularProgressIndicator());
-              }
-
-              final allProducts = productSnapshot.data!;
-              final favProducts = allProducts
+              final all = prodSnap.data!;
+              final favProducts = all
                   .where((p) => favIds.contains(p.id))
                   .toList();
 
               return ListView.builder(
                 itemCount: favProducts.length,
-                itemBuilder: (context, index) {
-                  final p = favProducts[index];
-                  return ProductCard(
-                    product: p,
-                    isFavorite: true,
-                    onAddToCart: () => fs.addToCart(p.id),
-                    onToggleFavorite: () => fs.removeFromFavorites(p.id),
+                itemBuilder: (context, i) {
+                  final p = favProducts[i];
+                  return ListTile(
+                    leading: p.imageUrl.isNotEmpty
+                        ? Image.network(
+                            p.imageUrl,
+                            width: 60,
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                    title: Text(p.name),
+                    subtitle: Text('৳ ${p.price.toStringAsFixed(0)}'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.add_shopping_cart),
+                          onPressed: () => fs.addToCart(p.id),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () => fs.removeFromFavorites(p.id),
+                        ),
+                      ],
+                    ),
                   );
                 },
               );

@@ -1,57 +1,70 @@
 import 'package:flutter/material.dart';
-import '../../services/firestore_service.dart';
-import '../../models/product.dart';
-import '../../widgets/product_card.dart';
+import '../product/product_list_screen.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  HomeScreen({super.key});
+
+  final List<Map<String, String>> categories = [
+    {'id': 'chairs', 'label': 'Chairs'},
+    {'id': 'sofa', 'label': 'Sofas'},
+    {'id': 'table', 'label': 'Tables'},
+    {'id': 'bed', 'label': 'Beds'},
+    {'id': 'decor', 'label': 'Decor'},
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final FirestoreService fs = FirestoreService();
-
     return Scaffold(
       appBar: AppBar(title: const Text('Furniture')),
-      body: StreamBuilder<List<Product>>(
-        stream: fs.getProducts(),
-        builder: (context, productSnapshot) {
-          if (!productSnapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final products = productSnapshot.data!;
-          if (products.isEmpty) {
-            return const Center(child: Text('No products yet'));
-          }
-
-          return StreamBuilder<List<String>>(
-            stream: fs.getFavoriteProductIds(),
-            builder: (context, favSnapshot) {
-              final favIds = favSnapshot.data ?? [];
-
-              return ListView.builder(
-                itemCount: products.length,
-                itemBuilder: (context, index) {
-                  final p = products[index];
-                  final isFav = favIds.contains(p.id);
-
-                  return ProductCard(
-                    product: p,
-                    isFavorite: isFav,
-                    onAddToCart: () => fs.addToCart(p.id),
-                    onToggleFavorite: () {
-                      if (isFav) {
-                        fs.removeFromFavorites(p.id);
-                      } else {
-                        fs.addToFavorites(p.id);
-                      }
-                    },
-                  );
-                },
-              );
-            },
-          );
-        },
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 72,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, i) {
+                final cat = categories[i];
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProductListScreen(category: cat['id']!),
+                      ),
+                    );
+                  },
+                  child: Chip(
+                    label: Text(cat['label']!),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Recommended',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // You can show some recommended products or recent items here
+          Expanded(
+            child: Center(
+              child: Text('Select a category above to view products'),
+            ),
+          ),
+        ],
       ),
     );
   }
