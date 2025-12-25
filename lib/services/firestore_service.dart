@@ -5,30 +5,26 @@ import '../models/product.dart';
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-
-
-
-
+  // =================== UID Getter ===================
   String get _uid {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw FirebaseAuthException(
-        code: 'no-current-user',
-        message: 'No logged-in user. Please login first.',
+        code: 'not-logged-in',
+        message: 'User not logged in.',
       );
     }
     return user.uid;
   }
 
-  // ---------------- Products ----------------
+  // =================== PRODUCTS ===================
   Stream<List<Product>> getProducts() {
     return _db
         .collection('products')
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map(
-          (snap) =>
-              snap.docs.map((d) => Product.fromMap(d.id, d.data())).toList(),
+          (e) => e.docs.map((d) => Product.fromMap(d.id, d.data())).toList(),
         );
   }
 
@@ -36,153 +32,116 @@ class FirestoreService {
     return _db
         .collection('products')
         .where('category', isEqualTo: category)
-        .limit(50)
         .snapshots()
         .map(
-          (snap) =>
-              snap.docs.map((d) => Product.fromMap(d.id, d.data())).toList(),
+          (e) => e.docs.map((d) => Product.fromMap(d.id, d.data())).toList(),
         );
   }
 
-  // ---------------- Cart ----------------
+  // =================== CART ===================
   Future<void> addToCart(
     String productId, {
     Map<String, dynamic>? extra,
   }) async {
-    final docRef = _db
-        .collection('users')
+    final ref = _db
+        .collection("users")
         .doc(_uid)
-        .collection('cart')
+        .collection("cart")
         .doc(productId);
 
-    // Use transaction so we both write the snapshot and increment safely
     await _db.runTransaction((tx) async {
-      final snapshot = await tx.get(docRef);
-      if (!snapshot.exists) {
-        final data = {
-          'quantity': 1,
-          'createdAt': FieldValue.serverTimestamp(),
+      final snap = await tx.get(ref);
+
+      if (!snap.exists) {
+        tx.set(ref, {
+          "quantity": 1,
+          "createdAt": FieldValue.serverTimestamp(),
           if (extra != null) ...extra,
-        };
-        tx.set(docRef, data, SetOptions(merge: true));
+        });
       } else {
-        // increment quantity by 1
-        tx.update(docRef, {'quantity': FieldValue.increment(1)});
-        // also merge snapshot fields if provided
-        if (extra != null) {
-          tx.update(docRef, extra);
-        }
+        tx.update(ref, {"quantity": FieldValue.increment(1)});
+        if (extra != null) tx.update(ref, extra);
       }
     });
   }
 
-  // Decrement quantity: if quantity > 1 decrement, else delete doc
   Future<void> decrementCartItem(String productId) async {
-    final docRef = _db
-        .collection('users')
+    final ref = _db
+        .collection("users")
         .doc(_uid)
-        .collection('cart')
+        .collection("cart")
         .doc(productId);
 
     await _db.runTransaction((tx) async {
-      final snapshot = await tx.get(docRef);
-      if (!snapshot.exists) return;
-      final data = snapshot.data()!;
-      final currentQty = (data['quantity'] ?? 0) as num;
-      if (currentQty > 1) {
-        tx.update(docRef, {'quantity': FieldValue.increment(-1)});
-      } else {
-        tx.delete(docRef);
-      }
+      final snap = await tx.get(ref);
+      if (!snap.exists) return;
+
+      final q = snap.data()!['quantity'] ?? 0;
+      q > 1
+          ? tx.update(ref, {"quantity": FieldValue.increment(-1)})
+          : tx.delete(ref);
     });
   }
 
-  // Remove from cart
-  Future<void> removeFromCart(String productId) {
-    return _db
-        .collection('users')
-        .doc(_uid)
-        .collection('cart')
-        .doc(productId)
-        .delete();
-  }
+  Future<void> removeFromCart(String productId) => _db
+      .collection("users")
+      .doc(_uid)
+      .collection("cart")
+      .doc(productId)
+      .delete();
 
-  // Stream of cart documents with their data (not only ids)
   Stream<List<Map<String, dynamic>>> streamCartDocs() {
     return _db
-        .collection('users')
+        .collection("users")
         .doc(_uid)
-        .collection('cart')
+        .collection("cart")
         .snapshots()
         .map(
-          (snap) => snap.docs.map((d) {
+          (e) => e.docs.map((d) {
             final m = d.data();
             m['id'] = d.id;
             return m;
           }).toList(),
         );
-  }
-
-  Stream<List<String>> getCartProductIds() {
-    return _db
-        .collection('users')
-        .doc(_uid)
-        .collection('cart')
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => d.id).toList());
   }
 
   Future<void> clearCart() async {
-    final ref = _db.collection('users').doc(_uid).collection('cart');
-    final snap = await ref.get();
-    for (final doc in snap.docs) {
-      await doc.reference.delete();
+    final ref = _db.collection("users").doc(_uid).collection("cart");
+    final docs = await ref.get();
+    for (var d in docs.docs) {
+      await d.reference.delete();
     }
   }
 
-  // ---------------- Favorites ----------------
-  // Add to favorites (store snapshot too)
+  // =================== FAVORITES ===================
   Future<void> addToFavorites(String productId, {Map<String, dynamic>? extra}) {
-    final docRef = _db
-        .collection('users')
-        .doc(_uid)
-        .collection('favorites')
-        .doc(productId);
-    final data = {
-      'fav': true,
-      'createdAt': FieldValue.serverTimestamp(),
-      if (extra != null) ...extra,
-    };
-    return docRef.set(data, SetOptions(merge: true));
-  }
-
-  Future<void> removeFromFavorites(String productId) {
     return _db
-        .collection('users')
+        .collection("users")
         .doc(_uid)
-        .collection('favorites')
+        .collection("favorites")
         .doc(productId)
-        .delete();
+        .set({
+          "fav": true,
+          "createdAt": FieldValue.serverTimestamp(),
+          if (extra != null) ...extra,
+        }, SetOptions(merge: true));
   }
 
-  Stream<List<String>> getFavoriteProductIds() {
-    return _db
-        .collection('users')
-        .doc(_uid)
-        .collection('favorites')
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => d.id).toList());
-  }
+  Future<void> removeFromFavorites(String productId) => _db
+      .collection("users")
+      .doc(_uid)
+      .collection("favorites")
+      .doc(productId)
+      .delete();
 
-  // Stream of favorite documents with their data
   Stream<List<Map<String, dynamic>>> streamFavoriteDocs() {
     return _db
-        .collection('users')
+        .collection("users")
         .doc(_uid)
-        .collection('favorites')
+        .collection("favorites")
         .snapshots()
         .map(
-          (snap) => snap.docs.map((d) {
+          (e) => e.docs.map((d) {
             final m = d.data();
             m['id'] = d.id;
             return m;
@@ -190,117 +149,79 @@ class FirestoreService {
         );
   }
 
-  // ---------------- Profile ----------------
-  Future<void> saveUserProfile({required String name, required String phone}) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw FirebaseAuthException(
-        code: 'no-current-user',
-        message: 'No logged-in user. Please login first.',
-      );
-    }
+  // =================== PROFILE ===================
+  Future<void> saveUserProfile({
+    required String name,
+    required String phone,
+  }) async {
+    final u = FirebaseAuth.instance.currentUser;
+    if (u == null) throw Exception("Login first");
 
-    return _db.collection('users').doc(user.uid).set({
-      'email': user.email,
-      'name': name,
-      'phone': phone,
-      'createdAt': FieldValue.serverTimestamp(),
+    return _db.collection("users").doc(u.uid).set({
+      "email": u.email,
+      "name": name,
+      "phone": phone,
+      "updatedAt": FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
-  // ---------------- Address (save & get) ----------------
+  // =================== ADDRESS ===================
   Future<void> saveAddress({
     required String name,
     required String phone,
     required String address,
   }) {
     return _db
-        .collection('users')
+        .collection("users")
         .doc(_uid)
-        .collection('profile')
-        .doc('info')
+        .collection("profile")
+        .doc("info")
         .set({
-          'name': name,
-          'phone': phone,
-          'address': address,
-          'updatedAt': FieldValue.serverTimestamp(),
+          "name": name,
+          "phone": phone,
+          "address": address,
+          "updatedAt": FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
   }
 
   Stream<Map<String, dynamic>?> getAddress() {
     return _db
-        .collection('users')
+        .collection("users")
         .doc(_uid)
-        .collection('profile')
-        .doc('info')
+        .collection("profile")
+        .doc("info")
         .snapshots()
         .map((d) => d.data());
   }
 
-  /// Seed default products for a category if none exist.
-  /// This is idempotent: it only seeds when the category has zero docs.
-  Future<void> seedDefaultProductsForCategory(
-    String category, {
-    int count = 50,
-  }) async {
-    final coll = _db.collection('products');
-    final q = await coll.where('category', isEqualTo: category).limit(1).get();
-    if (q.docs.isNotEmpty) {
-      // already has at least one product -> do not seed
-      return;
-    }
-
-    final batch = _db.batch();
-    for (int i = 0; i < count; i++) {
-      final docRef = coll.doc(); // auto id
-      batch.set(docRef, {
-        'name':
-            '${category[0].toUpperCase()}${category.substring(1)} Item ${i + 1}',
-        'price': (800 + (i % 20) * 50).toDouble(), // sample price pattern
-        'imageUrl': '', // leave empty or provide default URL
-        'category': category,
-        'createdAt': FieldValue.serverTimestamp(),
-        // optional: add short description, stock, etc.
-        'description': 'Default $category product #${i + 1}',
-      });
-    }
-
-    await batch.commit();
-  }
-
-  // create order
+  // =================== ORDERS ===================
   Future<void> createOrder({
-    required List<Map<String, dynamic>> items,
+    required List items,
     required double total,
     required String paymentMethod,
-    required Map<String, String> address,
-    double discount = 0, // <--- Add
+    required Map address,
+    double discount = 0,
   }) async {
-    await _db.collection('users').doc(_uid).collection('orders').add({
-      'items': items,
-      'total': total,
-      'discount': discount, // <--- Store discount
-      'paymentMethod': paymentMethod,
-      'address': address,
-      'status': 'completed',
-      'createdAt': FieldValue.serverTimestamp(),
+    await _db.collection("users").doc(_uid).collection("orders").add({
+      "items": items,
+      "total": total,
+      "discount": discount,
+      "paymentMethod": paymentMethod,
+      "address": address,
+      "createdAt": FieldValue.serverTimestamp(),
+      "status": "Completed",
     });
 
     await clearCart();
   }
 
-
-  // get orders
   Stream<List<Map<String, dynamic>>> getOrders() {
     return _db
-        .collection('users')
+        .collection("users")
         .doc(_uid)
-        .collection('orders')
-        .orderBy('createdAt', descending: true)
+        .collection("orders")
+        .orderBy("createdAt", descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => d.data()).toList());
+        .map((e) => e.docs.map((d) => d.data()).toList());
   }
-
-
-
 }
