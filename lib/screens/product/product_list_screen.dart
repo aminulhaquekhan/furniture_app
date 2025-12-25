@@ -9,22 +9,24 @@ class ProductListScreen extends StatelessWidget {
 
   List<String> _possibleKeys(String raw) {
     final base = raw.toLowerCase().trim();
-    // try direct, plural 's', plural 'es' and a couple common synonyms
+
     return <String>[
       base,
       '${base}s',
       '${base}es',
-      // synonyms mapping for common variants
       if (base == 'sofa') 'sofas',
       if (base == 'table') 'tables',
       if (base == 'bed') 'beds',
       if (base == 'chair') 'chairs',
-    ].toSet().toList(); // uniq
+    ].toSet().toList();
   }
+
+  
 
   @override
   Widget build(BuildContext context) {
     final keys = _possibleKeys(category);
+
     List products = [];
     for (final k in keys) {
       final p = productCatalog[k];
@@ -33,14 +35,20 @@ class ProductListScreen extends StatelessWidget {
         break;
       }
     }
-
-    // debug prints (optional) — remove later
-    debugPrint(
-      'Requested category: $category -> tried keys: $keys -> found: ${products.length}',
-    );
+    
 
     return Scaffold(
-      appBar: AppBar(title: Text(category.toUpperCase())),
+      appBar: AppBar(
+        title: Text(
+          category.isEmpty
+              ? ''
+              : category[0].toUpperCase() + category.substring(1),
+        ),
+        backgroundColor: Colors.brown[700],
+        foregroundColor: Colors.white,
+      ),
+
+      //appBar: AppBar(title: Text(category.toUpperCase())),
       body: products.isEmpty
           ? const Center(child: Text("No products in this category"))
           : GridView.builder(

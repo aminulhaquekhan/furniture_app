@@ -190,22 +190,6 @@ class FirestoreService {
         );
   }
 
-  // ---------------- Orders ----------------
-  Future<void> createOrder({
-    required List<Map<String, dynamic>> items,
-    required double totalAmount,
-    required String paymentMethod,
-  }) {
-    final ordersRef = _db.collection('users').doc(_uid).collection('orders');
-    return ordersRef.add({
-      'items': items,
-      'totalAmount': totalAmount,
-      'paymentMethod': paymentMethod,
-      'status': 'pending',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
-
   // ---------------- Profile ----------------
   Future<void> saveUserProfile({required String name, required String phone}) {
     final user = FirebaseAuth.instance.currentUser;
@@ -283,6 +267,40 @@ class FirestoreService {
 
     await batch.commit();
   }
+
+  // create order
+  Future<void> createOrder({
+    required List<Map<String, dynamic>> items,
+    required double total,
+    required String paymentMethod,
+    required Map<String, String> address,
+    double discount = 0, // <--- Add
+  }) async {
+    await _db.collection('users').doc(_uid).collection('orders').add({
+      'items': items,
+      'total': total,
+      'discount': discount, // <--- Store discount
+      'paymentMethod': paymentMethod,
+      'address': address,
+      'status': 'completed',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    await clearCart();
+  }
+
+
+  // get orders
+  Stream<List<Map<String, dynamic>>> getOrders() {
+    return _db
+        .collection('users')
+        .doc(_uid)
+        .collection('orders')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => d.data()).toList());
+  }
+
 
 
 }

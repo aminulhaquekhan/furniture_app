@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:furniture_app/screens/cart/checkout_screen.dart';
 import '../../services/firestore_service.dart';
 
 class CartScreen extends StatelessWidget {
@@ -9,21 +10,41 @@ class CartScreen extends StatelessWidget {
     final fs = FirestoreService();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Cart')),
+      appBar: AppBar(
+        title: const Text('My Cart'),
+        backgroundColor: Colors.brown[700],
+        foregroundColor: Colors.white,
+      ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: fs.streamCartDocs(),
         builder: (context, snap) {
-          if (snap.hasError) return Center(child: Text('Error: ${snap.error}'));
+          if (snap.hasError) {
+            return Center(child: Text('Error: ${snap.error}'));
+          }
           if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final docs = snap.data!;
-          if (docs.isEmpty) return const Center(child: Text('Cart is empty'));
 
+          final docs = snap.data!;
+          if (docs.isEmpty) {
+            return const Center(child: Text('Cart is empty'));
+          }
+
+          final List<Map<String, dynamic>> cartItems = [];
           double total = 0;
+
           for (final d in docs) {
             final price = (d['price'] ?? 0).toDouble();
-            final qty = (d['quantity'] ?? 0) as num;
+            final qty = (d['quantity'] ?? 1) as int;
+
+            cartItems.add({
+              'id': d['id'],
+              'name': d['name'],
+              'price': price,
+              'qty': qty,
+              'imageUrl': d['imageUrl'],
+            });
+
             total += price * qty;
           }
 
@@ -36,11 +57,11 @@ class CartScreen extends StatelessWidget {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, i) {
                     final item = docs[i];
-                    final id = item['id'] ?? '';
+                    final id = item['id'];
                     final name = item['name'] ?? 'Unnamed';
                     final price = (item['price'] ?? 0).toDouble();
                     final imageUrl = item['imageUrl'] ?? '';
-                    final qty = (item['quantity'] ?? 0) as int;
+                    final qty = (item['quantity'] ?? 1) as int;
 
                     return Card(
                       shape: RoundedRectangleBorder(
@@ -69,7 +90,6 @@ class CartScreen extends StatelessWidget {
                                   : null,
                             ),
                             const SizedBox(width: 12),
-                            // details and controls
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,7 +111,6 @@ class CartScreen extends StatelessWidget {
                                   const SizedBox(height: 8),
                                   Row(
                                     children: [
-                                      // minus
                                       IconButton(
                                         icon: const Icon(
                                           Icons.remove_circle_outline,
@@ -104,15 +123,12 @@ class CartScreen extends StatelessWidget {
                                         qty.toString(),
                                         style: const TextStyle(fontSize: 16),
                                       ),
-                                      // plus
                                       IconButton(
                                         icon: const Icon(
                                           Icons.add_circle_outline,
                                         ),
                                         onPressed: () async {
-                                          await fs.addToCart(
-                                            id,
-                                          ); // this will increment quantity by 1 (if doc exists, transaction increments)
+                                          await fs.addToCart(id);
                                         },
                                       ),
                                       const Spacer(),
@@ -134,7 +150,8 @@ class CartScreen extends StatelessWidget {
                   },
                 ),
               ),
-              // total + checkout
+
+
               Container(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -148,14 +165,19 @@ class CartScreen extends StatelessWidget {
                     ),
                     const Spacer(),
                     FilledButton(
-                      onPressed: () {
-                        // TODO: implement checkout flow
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Checkout not implemented'),
-                          ),
-                        );
-                      },
+                      onPressed: cartItems.isEmpty
+                          ? null
+                          : () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CheckoutScreen(
+                                    total: total,
+                                    items: cartItems,
+                                  ),
+                                ),
+                              );
+                            },
                       child: const Text('Checkout'),
                     ),
                   ],

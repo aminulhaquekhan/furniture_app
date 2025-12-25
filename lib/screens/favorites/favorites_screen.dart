@@ -55,7 +55,11 @@ class FavoritesScreen extends StatelessWidget {
     final fs = FirestoreService();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Favorites')),
+      appBar: AppBar(
+        title: const Text('Favorites'),
+        backgroundColor: Colors.brown[700],
+        foregroundColor: Colors.white,
+      ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: fs
             .streamFavoriteDocs(), // this returns List<Map> where each map includes id field

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:furniture_app/screens/profile/orders_screen.dart';
 import '../../services/firestore_service.dart';
 import '../auth/auth_choice_screen.dart';
 
@@ -101,7 +102,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      appBar: AppBar(
+        title: const Text('Profile'),
+        backgroundColor: Colors.brown[700],
+        foregroundColor: Colors.white,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -153,6 +158,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
             ),
             const SizedBox(height: 24),
+            ListTile(
+              leading: const Icon(Icons.receipt_long),
+              title: const Text('My Orders'),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => OrdersScreen()),
+                );
+              },
+            ),
+
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
