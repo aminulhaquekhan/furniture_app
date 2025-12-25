@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
-import '../main/main_screen.dart'; // 🔴 গুরুত্বপূর্ণ import
+import '../main/main_screen.dart'; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -26,8 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      // 🔥 Login successful → সরাসরি MainScreen এ নিয়ে যাও,
-      // আগের সব পেজ স্ট্যাক থেকে মুছে ফেলো
+      //ogin successful
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const MainScreen()),
         (route) => false,

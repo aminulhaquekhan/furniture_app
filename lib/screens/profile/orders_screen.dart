@@ -120,7 +120,7 @@ class OrdersScreen extends StatelessWidget {
                             style: TextStyle(fontWeight: FontWeight.w600),
                           ),
                           Text(
-                            "- ৳ ${order['discount']}",
+                            "- ৳ ${(order['discount'] as num).toStringAsFixed(2)}",
                             style: const TextStyle(
                               color: Colors.red,
                               fontWeight: FontWeight.bold,
